@@ -4,7 +4,7 @@ const request = require("request-promise");
 const express = require("express");
 const app = express();
 const region = "asia-southeast1";
-
+//========================================== Line ==============================================================
 const config = {
   channelAccessToken: functions.config().line.channel_access_token,
   channelSecret: functions.config().line.channel_secret,
@@ -14,17 +14,15 @@ const LINE_HEADER = {
   "Content-Type": "application/json",
   Authorization: `Bearer WK6gkQSIcedlwVVquJkAR3BnQTEUvWfLXRvAqOPBBSt0mvX7+b4cu2Q+wg4sn2XjVPtwlCkmqAWAIua1HyZSdj1k/Xpozurpdw+jMHN3aW41iEEcCJE2/SFNsmoVwbrv1CoBihfCjypx0ZYT66VusgdB04t89/1O/w1cDnyilFU=`,
 };
-
+//========================================== firebase firestore ====================================================
 const admin = require("firebase-admin");
 admin.initializeApp(functions.config().firebase);
 const db = admin.firestore();
-
-const dialogflow = require("dialogflow");
+//=========================================== Dialog flow ============================================================
+const dialogflow = require("@google-cloud/dialogflow");
+const { SessionsClient } = require("@google-cloud/dialogflow");
+const { get } = require("request");
 const projectId = "chat-project-bef27";
-const sessionClient = new dialogflow.SessionsClient({
-  projectId,
-  keyFilename: "chat-project-bef27-72a3467da386.json",
-});
 //======================================================================================================================
 
 //=========================================== handle event =============================================================
@@ -33,7 +31,9 @@ async function handleEvent(req, event) {
     case "message":
       switch (event.message.type) {
         case "text":
-          return addChatHistory(req, event);
+          addChatHistory(req, event);
+          callDetect(req,event);
+          return;
       }
     default:
       throw new Error(`Unknown event: ${JSON.stringify(event)}`);
@@ -41,8 +41,34 @@ async function handleEvent(req, event) {
 }
 //============================================================================================================================
 
-//==================================== add chat history in firebase firestore ===============================================
-function addChatHistory(req, event) {
+//===================== function detectIntent api dialogflow .=====================================
+async function detectIntentApi(req, event) {
+  const sessionClient = new dialogflow.SessionsClient({
+    projectId,
+    keyFilename: "chat-project-bef27-72a3467da386.json",
+  });
+  const userId = event.source.userId;
+  const userText = event.message.text;
+  const sessionPath = sessionClient.projectAgentSessionPath(projectId, userId);
+  console.log("1");
+  const request = {
+    session: sessionPath,
+    queryInput: {
+      text: {
+        text: userText,
+        languageCode: "th",
+      },
+    },
+  };
+  const response = await sessionClient.detectIntent(request).catch((err) => {
+    console.log("detectIntent:", err);
+    throw err;
+  });
+  return response[0];
+}
+//======================================================================================================
+//==================================== function add chat history in firebase firestore ===============================================
+async function addChatHistory(req, event) {
   const userId = event.source.userId;
   const timestamp = event.timestamp;
   const userText = event.message.text;
@@ -58,52 +84,6 @@ function addChatHistory(req, event) {
       console.log(err);
     });
 }
-//==================================================================================================
-
-//===================== function detectIntent api dialogflow 3.=====================================
-async function detectIntentApi(req, event) {
-  const userId = event.source.userId;
-  const userText = event.message.text;
-
-  const intentResponse = await detectIntent(userId, message, "th");
-  const structjson = require("./structjson");
-  const intentResponseMessage = intentResponse.queryResult.fulfillmentMessages;
-  const replyMessage = intentResponseMessage.map((messageObj) => {
-    let struct;
-    if (messageObj.message === "text") {
-      return { type: "text", text: messageObj.text.text[0] };
-    } else if (messageObj.message === "payload") {
-      struct = messageObj.payload;
-      return structjson.structProtoToJson(struct);
-    }
-    request({
-      method: "POST",
-      uri: `${LINE_MESSAGING_API}/reply`,
-      headers: LINE_HEADER,
-      body: JSON.stringify({
-        replyToken: event.replyToken,
-        messages: replyMessage,
-      }),
-    });
-  });
-
-  const detectIntent = async (userId, userText, languageCode) => {
-    const sessionPath = sessionClient.sessionPath(projectId, userId);
-    const request = {
-      session: sessionPath,
-      queryInput: {
-        text: {
-          text: userText,
-          languageCode: languageCode,
-        },
-      },
-    };
-    const response = await sessionClient.detectIntent(request);
-    return response[0];
-  };
-}
-//======================================================================================================
-
 //======================== line middle ware by Express js ====================================================
 app.post("/webhook", line.middleware(config), async (req, res) => {
   Promise.all(
@@ -115,5 +95,5 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
 });
 //========================================================================================================
 
-//======================= cloud function with express ====================================================
+//======================= cloud function with express  ====================================================
 exports.api = functions.region(region).https.onRequest(app);
