@@ -32,7 +32,6 @@ async function handleEvent(req, event) {
       switch (event.message.type) {
         case "text":
           addChatHistory(req, event);
-          callDetect(req,event);
           return;
       }
     default:
@@ -42,30 +41,30 @@ async function handleEvent(req, event) {
 //============================================================================================================================
 
 //===================== function detectIntent api dialogflow .=====================================
-async function detectIntentApi(req, event) {
-  const sessionClient = new dialogflow.SessionsClient({
-    projectId,
-    keyFilename: "chat-project-bef27-72a3467da386.json",
-  });
-  const userId = event.source.userId;
-  const userText = event.message.text;
-  const sessionPath = sessionClient.projectAgentSessionPath(projectId, userId);
-  console.log("1");
-  const request = {
-    session: sessionPath,
-    queryInput: {
-      text: {
-        text: userText,
-        languageCode: "th",
-      },
-    },
-  };
-  const response = await sessionClient.detectIntent(request).catch((err) => {
-    console.log("detectIntent:", err);
-    throw err;
-  });
-  return response[0];
-}
+// async function detectIntentApi(req, event) {
+//   const sessionClient = new dialogflow.SessionsClient({
+//     projectId,
+//     keyFilename: "chat-project-bef27-72a3467da386.json",
+//   });
+//   const userId = event.source.userId;
+//   const userText = event.message.text;
+//   const sessionPath = sessionClient.projectAgentSessionPath(projectId, userId);
+//   console.log("1");
+//   const request = {
+//     session: sessionPath,
+//     queryInput: {
+//       text: {
+//         text: userText,
+//         languageCode: "th",
+//       },
+//     },
+//   };
+//   const response = await sessionClient.detectIntent(request).catch((err) => {
+//     console.log("detectIntent:", err);
+//     throw err;
+//   });
+//   return response[0];
+// }
 //======================================================================================================
 //==================================== function add chat history in firebase firestore ===============================================
 async function addChatHistory(req, event) {
